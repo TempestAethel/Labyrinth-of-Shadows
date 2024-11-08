@@ -3,269 +3,334 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Labyrinth of Shadows</title>
+    <title>Shadow Maze</title>
     <style>
-        /* Basic CSS for game board */
         body {
-            font-family: Arial, sans-serif;
-            background-color: #222;
+            background-color: #121212;
             color: #fff;
             margin: 0;
-            padding: 0;
+            font-family: Arial, sans-serif;
             display: flex;
             justify-content: center;
             align-items: center;
+            flex-direction: column;
             height: 100vh;
-            overflow: hidden;
         }
-
-        .game-container {
-            display: grid;
-            grid-template-columns: repeat(10, 40px);
-            grid-template-rows: repeat(10, 40px);
-            gap: 1px;
-            position: relative;
+        .header {
+            text-align: center;
+            margin-bottom: 20px;
         }
-
-        .cell {
-            width: 40px;
-            height: 40px;
+        .header h1 {
+            font-size: 36px;
+            color: #00bcd4; /* Cyan color */
+        }
+        .instructions {
+            font-size: 14px;
+            text-align: center;
+            color: #fff;
+            margin-top: 10px;
+        }
+        canvas {
+            border: 2px solid #fff;
+            box-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+        }
+        .toast {
+            visibility: hidden;
+            min-width: 250px;
             background-color: #333;
-            border: 1px solid #444;
+            color: #fff;
+            text-align: center;
+            border-radius: 2px;
+            padding: 16px;
+            position: fixed;
+            z-index: 1;
+            left: 50%;
+            bottom: 30px;
+            transform: translateX(-50%);
+            font-size: 17px;
         }
-
-        .wall {
-            background-color: #555;
+        .toast.show {
+            visibility: visible;
+            animation: fadeInOut 3s;
         }
-
-        .player {
-            background-color: #f0f;
-            border-radius: 50%;
-        }
-
-        .light {
-            background-color: #ff0;
-        }
-
-        .dark {
-            background-color: #222;
-        }
-
-        .enemy {
-            background-color: red;
-            border-radius: 50%;
-        }
-
-        .exit {
-            background-color: green;
+        @keyframes fadeInOut {
+            0% { opacity: 0; }
+            10% { opacity: 1; }
+            90% { opacity: 1; }
+            100% { opacity: 0; }
         }
     </style>
 </head>
 <body>
+    <div class="header">
+        <h1>Shadow Maze</h1>
+        <p class="instructions">Use arrow keys or WASD to navigate the maze</p>
+        <p id="timer" style="font-size: 18px;">Time: 00:00</p>
+    </div>
+    <canvas id="mazeCanvas" width="500" height="500"></canvas>
 
-    <div class="game-container" id="game-board"></div>
+    <!-- Toast Notification -->
+    <div id="toast" class="toast"></div>
 
     <script>
-        const rows = 10;
-        const cols = 10;
-        const board = document.getElementById('game-board');
-        let playerPos = { x: 0, y: 0 };  // Start position of the player
-        let exitPos = { x: cols - 1, y: rows - 1 }; // Exit position
-        let maze = [];
-        let enemies = [];
-        const enemyCount = 2; // Number of enemies
-        let isGameOver = false;
+        const canvas = document.getElementById('mazeCanvas');
+        const ctx = canvas.getContext('2d');
+        const timerDisplay = document.getElementById('timer');
+        const toast = document.getElementById('toast');
 
-        // Function to create the maze (random walls and a simple path for now)
+        const gridSize = 20;
+        const cols = canvas.width / gridSize;
+        const rows = canvas.height / gridSize;
+
+        const DIRECTIONS = [
+            { x: 0, y: -1 }, // Up
+            { x: 1, y: 0 },  // Right
+            { x: 0, y: 1 },  // Down
+            { x: -1, y: 0 }, // Left
+        ];
+
+        const WALL = 1;
+        const PATH = 0;
+        const PLAYER = 2;
+        const EXIT = 3;
+        const ENEMY = 4;
+
+        let maze = [];
+        let playerPos = { x: 1, y: 1 };
+        let exitPos = { x: cols - 2, y: rows - 2 };
+        let enemies = [];
+        let gameStarted = false;
+        let startTime = 0;
+        let gameTimer = null;
+        let movementDisabled = false; // Flag to disable movement after winning
+
+        // Generate the maze using DFS
         function generateMaze() {
-            maze = [];
-            for (let r = 0; r < rows; r++) {
-                maze[r] = [];
-                for (let c = 0; c < cols; c++) {
-                    maze[r][c] = Math.random() < 0.3 ? 'wall' : 'path'; // 30% chance for a wall
+            maze = Array.from({ length: rows }, () => Array(cols).fill(WALL));
+
+            // DFS stack
+            const stack = [{ x: 1, y: 1 }];
+            maze[1][1] = PATH;
+
+            while (stack.length > 0) {
+                const current = stack[stack.length - 1];
+                const { x, y } = current;
+                const directions = DIRECTIONS.filter(d => {
+                    const nx = x + d.x * 2;
+                    const ny = y + d.y * 2;
+                    return nx >= 1 && ny >= 1 && nx < cols - 1 && ny < rows - 1 && maze[ny][nx] === WALL;
+                });
+
+                if (directions.length > 0) {
+                    const dir = directions[Math.floor(Math.random() * directions.length)];
+                    const nx = x + dir.x * 2;
+                    const ny = y + dir.y * 2;
+
+                    maze[ny][nx] = PATH;
+                    maze[y + dir.y][x + dir.x] = PATH;
+
+                    stack.push({ x: nx, y: ny });
+                } else {
+                    stack.pop();
                 }
             }
-            maze[0][0] = 'path'; // Player start position (make sure it's not a wall)
-            maze[exitPos.y][exitPos.x] = 'path'; // Exit position (make sure it's not a wall)
 
-            // Place enemies randomly
-            for (let i = 0; i < enemyCount; i++) {
+            maze[exitPos.y][exitPos.x] = EXIT;
+        }
+
+        // Place enemies randomly
+        function placeEnemies() {
+            enemies = [];
+            for (let i = 0; i < 2; i++) {
                 let enemyPos;
                 do {
                     enemyPos = { x: Math.floor(Math.random() * cols), y: Math.floor(Math.random() * rows) };
-                } while (maze[enemyPos.y][enemyPos.x] !== 'path' || (enemyPos.x === playerPos.x && enemyPos.y === playerPos.y));
-                enemies.push({ ...enemyPos });
+                } while (maze[enemyPos.y][enemyPos.x] !== PATH || (enemyPos.x === playerPos.x && enemyPos.y === playerPos.y));
+                enemies.push(enemyPos);
             }
         }
 
-        // Function to draw the maze on the board
+        // Draw the maze, player, and enemies
         function drawMaze() {
-            board.innerHTML = ''; // Clear the board before redrawing
-            for (let r = 0; r < rows; r++) {
-                for (let c = 0; c < cols; c++) {
-                    const cell = document.createElement('div');
-                    cell.classList.add('cell');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-                    // Determine the cell type (wall, path, etc.)
-                    if (maze[r][c] === 'wall') {
-                        cell.classList.add('wall');
-                    } else if (isPlayerPosition(r, c)) {
-                        cell.classList.add('player');  // Mark the player position
-                    } else if (isExitPosition(r, c)) {
-                        cell.classList.add('exit');  // Exit position
-                    } else if (isLightPosition(r, c)) {
-                        cell.classList.add('light');  // Light cells are revealed
-                    } else {
-                        cell.classList.add('dark');  // Shadowed cells
+            for (let y = 0; y < rows; y++) {
+                for (let x = 0; x < cols; x++) {
+                    const cell = maze[y][x];
+                    ctx.beginPath();
+                    ctx.rect(x * gridSize, y * gridSize, gridSize, gridSize);
+
+                    if (cell === WALL) {
+                        ctx.fillStyle = '#333';
+                    } else if (cell === PATH) {
+                        ctx.fillStyle = '#1d1d1d';
+                    } else if (cell === PLAYER) {
+                        ctx.fillStyle = '#00bcd4'; // Cyan player color
+                    } else if (cell === EXIT) {
+                        ctx.fillStyle = '#009688'; // Teal exit color
                     }
 
-                    // Draw enemies
-                    enemies.forEach(enemy => {
-                        if (enemy.x === c && enemy.y === r) {
-                            cell.classList.add('enemy');
-                        }
-                    });
+                    ctx.fill();
+                    ctx.strokeStyle = '#222';
+                    ctx.stroke();
+                }
+            }
 
-                    board.appendChild(cell);
+            // Draw enemies
+            enemies.forEach(enemy => {
+                ctx.beginPath();
+                ctx.arc(enemy.x * gridSize + gridSize / 2, enemy.y * gridSize + gridSize / 2, gridSize / 3, 0, 2 * Math.PI);
+                ctx.fillStyle = 'red';
+                ctx.fill();
+                ctx.strokeStyle = '#222';
+                ctx.stroke();
+            });
+        }
+
+        // Start the game timer
+        function startGameTimer() {
+            gameStarted = true;
+            startTime = Date.now();
+            gameTimer = setInterval(() => {
+                const elapsed = Math.floor((Date.now() - startTime) / 1000);
+                const minutes = String(Math.floor(elapsed / 60)).padStart(2, '0');
+                const seconds = String(elapsed % 60).padStart(2, '0');
+                timerDisplay.textContent = `Time: ${minutes}:${seconds}`;
+            }, 1000);
+        }
+
+        // Show toast message
+        function showToast() {
+            const elapsed = Math.floor((Date.now() - startTime) / 1000);
+            const minutes = String(Math.floor(elapsed / 60)).padStart(2, '0');
+            const seconds = String(elapsed % 60).padStart(2, '0');
+            const winTime = `${minutes}:${seconds}`;
+
+            toast.textContent = `You Win! Time: ${winTime}`;
+            toast.classList.add('show');
+
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, 3000); // Toast shows for 3 seconds
+        }
+
+        // Function to update player's position
+        function movePlayer(direction) {
+            if (movementDisabled) return; // If movement is disabled, return early
+
+            const newX = playerPos.x + direction.x;
+            const newY = playerPos.y + direction.y;
+
+            if (maze[newY] && maze[newY][newX] !== WALL) {
+                maze[playerPos.y][playerPos.x] = PATH;
+                playerPos = { x: newX, y: newY };
+                maze[playerPos.y][playerPos.x] = PLAYER;
+
+                if (playerPos.x === exitPos.x && playerPos.y === exitPos.y) {
+                    clearInterval(gameTimer);
+                    showToast();
+
+                    // Disable movement for 3 seconds
+                    movementDisabled = true;
+
+                    setTimeout(() => {
+                        playerPos = { x: 1, y: 1 }; // Reset player position
+                        generateMaze(); // Regenerate maze
+                        maze[playerPos.y][playerPos.x] = PLAYER; // Place player at start
+                        drawMaze(); // Redraw the maze
+                        startGameTimer(); // Restart the timer
+                        movementDisabled = false; // Enable movement after 3 seconds
+                    }, 3000); // 3-second delay
                 }
             }
         }
 
-        // Check if a cell is the current player position
-        function isPlayerPosition(r, c) {
-            return playerPos.x === c && playerPos.y === r;
-        }
-
-        // Check if a cell is the exit position
-        function isExitPosition(r, c) {
-            return exitPos.x === c && exitPos.y === r;
-        }
-
-        // Check if a cell is within a light radius
-        function isLightPosition(r, c) {
-            // Light reveals a small area around the player (e.g., 1 cell in each direction)
-            const dx = Math.abs(playerPos.x - c);
-            const dy = Math.abs(playerPos.y - r);
-            return dx <= 1 && dy <= 1;
-        }
-
-        // Move the player based on arrow key input
-        function movePlayer(e) {
-            if (isGameOver) return;
-
-            let newX = playerPos.x;
-            let newY = playerPos.y;
-
-            switch (e.key) {
-                case 'ArrowUp':
-                    newY = Math.max(0, playerPos.y - 1);
-                    break;
-                case 'ArrowDown':
-                    newY = Math.min(rows - 1, playerPos.y + 1);
-                    break;
-                case 'ArrowLeft':
-                    newX = Math.max(0, playerPos.x - 1);
-                    break;
-                case 'ArrowRight':
-                    newX = Math.min(cols - 1, playerPos.x + 1);
-                    break;
-            }
-
-            if (maze[newY][newX] !== 'wall') {
-                playerPos = { x: newX, y: newY };
-                checkGameStatus();
-                drawMaze();
-            }
-        }
-
-        // AI for enemy movement (they move randomly or toward the player)
+        // Move enemies randomly
         function moveEnemies() {
             enemies.forEach(enemy => {
-                let direction = '';
-                // Simple AI: move randomly (you can improve this to chase the player)
-                const directions = ['up', 'down', 'left', 'right'];
-                direction = directions[Math.floor(Math.random() * directions.length)];
+                const randomDir = DIRECTIONS[Math.floor(Math.random() * DIRECTIONS.length)];
+                const newX = enemy.x + randomDir.x;
+                const newY = enemy.y + randomDir.y;
 
-                let newX = enemy.x;
-                let newY = enemy.y;
-
-                switch (direction) {
-                    case 'up':
-                        newY = Math.max(0, enemy.y - 1);
-                        break;
-                    case 'down':
-                        newY = Math.min(rows - 1, enemy.y + 1);
-                        break;
-                    case 'left':
-                        newX = Math.max(0, enemy.x - 1);
-                        break;
-                    case 'right':
-                        newX = Math.min(cols - 1, enemy.x + 1);
-                        break;
-                }
-
-                if (maze[newY][newX] === 'path') {
+                if (maze[newY] && maze[newY][newX] !== WALL && maze[newY][newX] !== PLAYER) {
                     enemy.x = newX;
                     enemy.y = newY;
                 }
             });
         }
 
-        // Check for collisions with enemies or exit
-        function checkGameStatus() {
-            // Check if player collides with an enemy
+        // Check for collision with enemies
+        function checkEnemyCollision() {
             enemies.forEach(enemy => {
                 if (enemy.x === playerPos.x && enemy.y === playerPos.y) {
-                    isGameOver = true;
-                    alert('Game Over! You were caught by a shadowy enemy!');
+                    clearInterval(gameTimer);
+                    toast.textContent = "Game Over! You were caught!";
+                    toast.classList.add('show');
+                    setTimeout(() => {
+                        toast.classList.remove('show');
+                    }, 3000); // 3 seconds
                 }
             });
-
-            // Check if player reaches the exit
-            if (playerPos.x === exitPos.x && playerPos.y === exitPos.y) {
-                isGameOver = true;
-                alert('You escaped the Labyrinth of Shadows!');
-            }
         }
 
-        // Shifting maze: randomly move walls every 5 seconds
+        // Shift walls in the maze
         function shiftMaze() {
-            const wallCount = Math.floor(Math.random() * 3) + 1; // Move 1-3 random walls
-            for (let i = 0; i < wallCount; i++) {
-                const row = Math.floor(Math.random() * rows);
-                const col = Math.floor(Math.random() * cols);
+            const shiftAmount = Math.floor(Math.random() * 3) + 1; // Shift 1 to 3 walls
+            for (let i = 0; i < shiftAmount; i++) {
+                const x = Math.floor(Math.random() * cols);
+                const y = Math.floor(Math.random() * rows);
 
-                if (maze[row][col] === 'path') {
-                    maze[row][col] = 'wall';
-                } else {
-                    maze[row][col] = 'path';
+                if (maze[y] && maze[y][x] === PATH) {
+                    maze[y][x] = WALL;
+                } else if (maze[y] && maze[y][x] === WALL) {
+                    maze[y][x] = PATH;
                 }
             }
-            drawMaze();
         }
 
-        // Initialize the game
-        function startGame() {
-            generateMaze();
+        document.addEventListener('keydown', (e) => {
+            if (!gameStarted) {
+                startGameTimer();
+            }
+
+            switch (e.key) {
+                case 'ArrowUp':
+                case 'w': // 'W' key to move up
+                    movePlayer(DIRECTIONS[0]);
+                    break;
+                case 'ArrowRight':
+                case 'd': // 'D' key to move right
+                    movePlayer(DIRECTIONS[1]);
+                    break;
+                case 'ArrowDown':
+                case 's': // 'S' key to move down
+                    movePlayer(DIRECTIONS[2]);
+                    break;
+                case 'ArrowLeft':
+                case 'a': // 'A' key to move left
+                    movePlayer(DIRECTIONS[3]);
+                    break;
+            }
             drawMaze();
-            window.addEventListener('keydown', movePlayer);
-
-            // Start shifting walls every 5 seconds
-            setInterval(shiftMaze, 5000);
-
-            // Move enemies every 1 second
-            setInterval(() => {
-                if (!isGameOver) {
-                    moveEnemies();
-                    checkGameStatus();
-                    drawMaze();
-                }
-            }, 1000);
-        }
+            moveEnemies();
+            checkEnemyCollision();
+        });
 
         // Start the game
+        function startGame() {
+            generateMaze();
+            placeEnemies();
+            maze[playerPos.y][playerPos.x] = PLAYER;
+            drawMaze();
+            startGameTimer();
+
+            setInterval(() => {
+                shiftMaze(); // Shift walls every 5 seconds
+                drawMaze();
+            }, 5000);
+        }
+
         startGame();
     </script>
-
 </body>
 </html>
