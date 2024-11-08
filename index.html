@@ -228,10 +228,7 @@
                 if (playerPos.x === exitPos.x && playerPos.y === exitPos.y) {
                     clearInterval(gameTimer);
                     showToast();
-
-                    // Disable movement for 3 seconds
                     movementDisabled = true;
-
                     setTimeout(() => {
                         playerPos = { x: 1, y: 1 }; // Reset player position
                         generateMaze(); // Regenerate maze
@@ -258,32 +255,35 @@
             });
         }
 
-        // Shift walls while maintaining a valid path
-        function shiftMaze() {
-            const shiftAmount = 2; // Shift only 2 walls each time
-            const directions = DIRECTIONS;
+        // Function to move enemies
+        function moveEnemies() {
+            enemies.forEach(enemy => {
+                const directions = DIRECTIONS.filter(dir => {
+                    const newX = enemy.x + dir.x;
+                    const newY = enemy.y + dir.y;
+                    return maze[newY] && maze[newY][newX] !== WALL;
+                });
 
-            for (let i = 0; i < shiftAmount; i++) {
-                // Pick random path cells
-                const pathCells = [];
-                for (let y = 1; y < rows - 1; y++) {
-                    for (let x = 1; x < cols - 1; x++) {
-                        if (maze[y][x] === PATH) {
-                            pathCells.push({ x, y });
-                        }
+                // Move towards the player if nearby (within 3 grid spaces)
+                const dist = Math.abs(playerPos.x - enemy.x) + Math.abs(playerPos.y - enemy.y);
+                if (dist <= 3) {
+                    // Chase player
+                    const moveTowardsPlayer = { x: playerPos.x - enemy.x, y: playerPos.y - enemy.y };
+                    if (Math.abs(moveTowardsPlayer.x) > Math.abs(moveTowardsPlayer.y)) {
+                        moveTowardsPlayer.y = 0;
+                    } else {
+                        moveTowardsPlayer.x = 0;
                     }
+                    const moveDirection = moveTowardsPlayer.x === 0 ? { x: 0, y: Math.sign(moveTowardsPlayer.y) } : { x: Math.sign(moveTowardsPlayer.x), y: 0 };
+                    enemy.x += moveDirection.x;
+                    enemy.y += moveDirection.y;
+                } else {
+                    // Random movement
+                    const randomDirection = directions[Math.floor(Math.random() * directions.length)];
+                    enemy.x += randomDirection.x;
+                    enemy.y += randomDirection.y;
                 }
-
-                const randomPath = pathCells[Math.floor(Math.random() * pathCells.length)];
-
-                const randomDir = directions[Math.floor(Math.random() * directions.length)];
-                const newX = randomPath.x + randomDir.x;
-                const newY = randomPath.y + randomDir.y;
-
-                if (maze[newY] && maze[newY][newX] === PATH) {
-                    maze[newY][newX] = WALL;
-                }
-            }
+            });
         }
 
         document.addEventListener('keydown', (e) => {
@@ -322,9 +322,10 @@
             startGameTimer();
 
             setInterval(() => {
-                shiftMaze(); // Shift walls every 5 seconds without breaking the path
+                moveEnemies(); // Move enemies
                 drawMaze();
-            }, 5000);
+                checkEnemyCollision();
+            }, 500); // Update enemy position every 500ms
         }
 
         startGame();
