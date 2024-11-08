@@ -1,4 +1,3 @@
-<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -104,7 +103,7 @@
         let gameTimer = null;
         let movementDisabled = false; // Flag to disable movement after winning
 
-        // Generate the maze using DFS
+        // Generate the maze using DFS (Depth First Search)
         function generateMaze() {
             maze = Array.from({ length: rows }, () => Array(cols).fill(WALL));
 
@@ -135,7 +134,7 @@
                 }
             }
 
-            maze[exitPos.y][exitPos.x] = EXIT;
+            maze[exitPos.y][exitPos.x] = EXIT; // Set exit location
         }
 
         // Place enemies randomly
@@ -245,21 +244,7 @@
             }
         }
 
-        // Move enemies randomly
-        function moveEnemies() {
-            enemies.forEach(enemy => {
-                const randomDir = DIRECTIONS[Math.floor(Math.random() * DIRECTIONS.length)];
-                const newX = enemy.x + randomDir.x;
-                const newY = enemy.y + randomDir.y;
-
-                if (maze[newY] && maze[newY][newX] !== WALL && maze[newY][newX] !== PLAYER) {
-                    enemy.x = newX;
-                    enemy.y = newY;
-                }
-            });
-        }
-
-        // Check for collision with enemies
+        // Function to check for enemy collision
         function checkEnemyCollision() {
             enemies.forEach(enemy => {
                 if (enemy.x === playerPos.x && enemy.y === playerPos.y) {
@@ -273,17 +258,30 @@
             });
         }
 
-        // Shift walls in the maze
+        // Shift walls while maintaining a valid path
         function shiftMaze() {
-            const shiftAmount = Math.floor(Math.random() * 3) + 1; // Shift 1 to 3 walls
-            for (let i = 0; i < shiftAmount; i++) {
-                const x = Math.floor(Math.random() * cols);
-                const y = Math.floor(Math.random() * rows);
+            const shiftAmount = 2; // Shift only 2 walls each time
+            const directions = DIRECTIONS;
 
-                if (maze[y] && maze[y][x] === PATH) {
-                    maze[y][x] = WALL;
-                } else if (maze[y] && maze[y][x] === WALL) {
-                    maze[y][x] = PATH;
+            for (let i = 0; i < shiftAmount; i++) {
+                // Pick random path cells
+                const pathCells = [];
+                for (let y = 1; y < rows - 1; y++) {
+                    for (let x = 1; x < cols - 1; x++) {
+                        if (maze[y][x] === PATH) {
+                            pathCells.push({ x, y });
+                        }
+                    }
+                }
+
+                const randomPath = pathCells[Math.floor(Math.random() * pathCells.length)];
+
+                const randomDir = directions[Math.floor(Math.random() * directions.length)];
+                const newX = randomPath.x + randomDir.x;
+                const newY = randomPath.y + randomDir.y;
+
+                if (maze[newY] && maze[newY][newX] === PATH) {
+                    maze[newY][newX] = WALL;
                 }
             }
         }
@@ -312,7 +310,6 @@
                     break;
             }
             drawMaze();
-            moveEnemies();
             checkEnemyCollision();
         });
 
@@ -325,7 +322,7 @@
             startGameTimer();
 
             setInterval(() => {
-                shiftMaze(); // Shift walls every 5 seconds
+                shiftMaze(); // Shift walls every 5 seconds without breaking the path
                 drawMaze();
             }, 5000);
         }
