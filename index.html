@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Labyrinth of Shadows</title>
+    <style>
+        /* Basic CSS for game board */
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #222;
+            color: #fff;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .game-container {
+            display: grid;
+            grid-template-columns: repeat(10, 40px);
+            grid-template-rows: repeat(10, 40px);
+            gap: 1px;
+            position: relative;
+        }
+
+        .cell {
+            width: 40px;
+            height: 40px;
+            background-color: #333;
+            border: 1px solid #444;
+        }
+
+        .wall {
+            background-color: #555;
+        }
+
+        .player {
+            background-color: #f0f;
+            border-radius: 50%;
+        }
+
+        .light {
+            background-color: #ff0;
+        }
+
+        .dark {
+            background-color: #222;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="game-container" id="game-board"></div>
+
+    <script>
+      
+      const rows = 10;
+const cols = 10;
+const board = document.getElementById('game-board');
+let playerPos = { x: 0, y: 0 };  // Start position of the player
+let maze = [];
+
+// Function to create the maze (random walls and a simple path for now)
+function generateMaze() {
+    maze = [];
+    for (let r = 0; r < rows; r++) {
+        maze[r] = [];
+        for (let c = 0; c < cols; c++) {
+            // Randomly assign walls and paths (you can implement more sophisticated maze generation later)
+            maze[r][c] = Math.random() < 0.3 ? 'wall' : 'path'; // 30% chance for a wall
+        }
+    }
+    maze[0][0] = 'path'; // Player start position (make sure it's not a wall)
+    maze[rows - 1][cols - 1] = 'path'; // Exit position (make sure it's not a wall)
+}
+
+// Function to draw the maze on the board
+function drawMaze() {
+    board.innerHTML = ''; // Clear the board before redrawing
+    for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+            const cell = document.createElement('div');
+            cell.classList.add('cell');
+            
+            // Determine the cell type (wall, path, etc.)
+            if (maze[r][c] === 'wall') {
+                cell.classList.add('wall');
+            } else {
+                if (isPlayerPosition(r, c)) {
+                    cell.classList.add('player');  // Mark the player position
+                } else if (isLightPosition(r, c)) {
+                    cell.classList.add('light');  // Light cells are revealed
+                } else {
+                    cell.classList.add('dark');  // Shadowed cells
+                }
+            }
+            
+            board.appendChild(cell);
+        }
+    }
+}
+
+// Check if a cell is the current player position
+function isPlayerPosition(r, c) {
+    return playerPos.x === c && playerPos.y === r;
+}
+
+// Check if a cell is within a light radius
+function isLightPosition(r, c) {
+    // Light reveals a small area around the player (e.g., 1 cell in each direction)
+    const dx = Math.abs(playerPos.x - c);
+    const dy = Math.abs(playerPos.y - r);
+    return dx <= 1 && dy <= 1;
+}
+
+// Move the player based on arrow key input
+function movePlayer(e) {
+    let newX = playerPos.x;
+    let newY = playerPos.y;
+    
+    switch (e.key) {
+        case 'ArrowUp':
+            newY = Math.max(0, playerPos.y - 1);
+            break;
+        case 'ArrowDown':
+            newY = Math.min(rows - 1, playerPos.y + 1);
+            break;
+        case 'ArrowLeft':
+            newX = Math.max(0, playerPos.x - 1);
+            break;
+        case 'ArrowRight':
+            newX = Math.min(cols - 1, playerPos.x + 1);
+            break;
+    }
+    
+    if (maze[newY][newX] !== 'wall') {
+        playerPos = { x: newX, y: newY };
+        drawMaze();
+    }
+}
+
+// Listen for arrow key presses to move the player
+window.addEventListener('keydown', movePlayer);
+
+// Initialize the game
+generateMaze();
+drawMaze();
+
+      
+    </script>
+</body>
+</html>
